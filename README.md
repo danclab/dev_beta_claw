@@ -18,4 +18,4 @@
 * sklearn (v1.1.0)
 * MNE (v1.0.3; https://mne.tools/stable/index.html)
 * dtw-python (v1.1.14; https://dynamictimewarping.github.io/)
-
+* meegkit (v0.1.1; https://github.com/nbara/python-meegkit)
