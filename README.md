@@ -1,6 +1,9 @@
 # dev_beta_claw
 
-Requires NoiseTools (http://audition.ens.fr/adc/NoiseTools/)
+Requirements
+===
+
+NoiseTools (http://audition.ens.fr/adc/NoiseTools/)
 
 Adjusted-Adjust
 
