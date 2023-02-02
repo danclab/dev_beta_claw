@@ -77,6 +77,9 @@ total_channels_interpolated=[];
 asr_tot_samples_modified=[];
 asr_change_in_RMS=[];
 
+% behavior
+exe_df=readtable(fullfile(study_info.data_dir,'behavior_exe.csv'));
+
 %% Loop over all data files
 for s_idx=1:size(study_info.participant_info,1)
     % Get subject ID from study info
@@ -86,7 +89,7 @@ for s_idx=1:size(study_info.participant_info,1)
     subject_raw_data_dir=fullfile(study_info.data_dir, 'data',subject, 'eeg');
     
     % Where to put processed (derived) data
-    subject_output_data_dir=fullfile(study_info.data_dir, 'derivatives', 'NEARICA', subject);
+    subject_output_data_dir=fullfile(study_info.data_dir, 'derivatives', 'NEARICA_behav', subject);
     
     if exist([subject_output_data_dir filesep '01_filtered_data'], 'dir') == 0
         mkdir([subject_output_data_dir filesep '01_filtered_data'])
@@ -116,24 +119,69 @@ for s_idx=1:size(study_info.participant_info,1)
     EEG = eeg_checkset(EEG);
     origEEG=EEG;
     
-    %% Delete discontinuous data from the raw data file
-    disconMarkers = find(strcmp({EEG.event.type}, 'boundary'));
-    if length(disconMarkers)>0
-        % remove discontinuous chunk
-        EEG = eeg_eegrej( EEG, [1 EEG.event(disconMarkers(1)).latency] );
-        EEG = eeg_checkset( EEG );
+    % Remove events after last LBBS event
+    lbbs_evts=find(strcmp('LBBS',{EEG.event.type}));
+    EEG.event=EEG.event(1:lbbs_evts(end));
+    EEG=eeg_checkset(EEG,'eventconsistency');
+    
+    %% Label the task
+    % Add observation baseline events
+    base_obs_latencies=[EEG.event(find(strcmp('LBOB',{EEG.event.type}))).latency];
+    for i=1:length(base_obs_latencies)
+        n_events=length(EEG.event);
+        EEG.event(n_events+1).type='OBM';
+        EEG.event(n_events+1).latency=(base_obs_latencies(i)-3*EEG.srate)-1;
+        EEG.event(n_events+1).urevent=n_events+1;
     end
+    %check for consistency and reorder the events chronologically...
+    EEG=eeg_checkset(EEG,'eventconsistency');
+    
+    % Add execution baseline events
+    exe_obs_latencies=[EEG.event(find(strcmp('LBEX',{EEG.event.type}))).latency];
+    for i=1:length(exe_obs_latencies)
+        n_events=length(EEG.event);
+        EEG.event(n_events+1).type='EBM';
+        EEG.event(n_events+1).latency=(exe_obs_latencies(i)-3*EEG.srate)-1;
+        EEG.event(n_events+1).urevent=n_events+1;
+    end
+    
+    % Add grasp completion and trial end events
+    start_evts=find(strcmp('LEXT',{EEG.event.type}));
+    end_evts=find(strcmp('LBBS',{EEG.event.type}));
+    end_times=[EEG.event(end_evts).latency];
+    
+    exe_subj_rows=find(strcmp(subject,exe_df.Subject));
+    for i=1:length(start_evts)
+        start_time=EEG.event(start_evts(i)).latency;
+        end_evt_time=end_times(find(end_times>start_time,1));
+        
+        if exe_df.GC(exe_subj_rows(i))>0
+            gc_time=exe_df.Gcfinal(exe_subj_rows(i));
+            n_events=length(EEG.event);
+            EEG.event(n_events+1).type='EXGC';
+            EEG.event(n_events+1).latency=(gc_time/1000)*EEG.srate;
+            EEG.event(n_events+1).urevent=n_events+1;
+        end
+        
+        n_events=length(EEG.event);
+        EEG.event(n_events+1).type='EXEND';
+        EEG.event(n_events+1).latency=end_evt_time;
+        EEG.event(n_events+1).urevent=n_events+1;
+    end
+    %check for consistency and reorder the events chronologically...
+    EEG=eeg_checkset(EEG,'eventconsistency');
+    
+    
+    %% Delete discontinuous data from the raw data file
     % remove data after last task event
-    end_base_flags=find(strcmp({EEG.event.type},'LBOB'));
-    end_exp_flags=find(strcmp({EEG.event.type},'LBEX'));
-    latency=max([EEG.event(end_base_flags(end)).latency EEG.event(end_exp_flags(end)).latency]);
+    end_flags=find(strcmp({EEG.event.type},'LBBS'));
+    latency=EEG.event(end_flags(end)).latency;
     % remove everything 1.5 seconds after the last event
     EEG = eeg_eegrej( EEG, [(latency+(1.5*EEG.srate)) EEG.pnts] );
     EEG = eeg_checkset( EEG );
     
     lbse_flags = find(strcmp({EEG.event.type},'LBSE'));
-    lext_flags = find(strcmp({EEG.event.type},'LEXT'));
-    latency=max([EEG.event(lbse_flags(1)).latency EEG.event(lext_flags(1)).latency]);
+    latency=EEG.event(lbse_flags(1)).latency;
     % remove everything until 1.5 seconds before the first event
     EEG = eeg_eegrej( EEG, [1 (latency-(1.5*EEG.srate))] );
     EEG = eeg_checkset( EEG );
@@ -152,35 +200,14 @@ for s_idx=1:size(study_info.participant_info,1)
     fig=figure();
     topoplot([],EEG.chanlocs, 'style', 'blank',  'electrodes', 'labelpoint', 'chaninfo', EEG.chaninfo);
     saveas(fig, fullfile(subject_output_data_dir,'01-initial_ch_locations.png'));
-    
-    %% Label the task
-    % Add observation baseline events
-    base_obs_latencies=[EEG.event(find(strcmp('LBOB',{EEG.event.type}))).latency];
-    for i=1:length(base_obs_latencies)
-        n_events=length(EEG.event);
-        EEG.event(n_events+1).type='OBM';
-        EEG.event(n_events+1).latency=(base_obs_latencies(i)-1.5*EEG.srate)-1;
-        EEG.event(n_events+1).urevent=n_events+1;
-    end
-    %check for consistency and reorder the events chronologically...
-    EEG=eeg_checkset(EEG,'eventconsistency');
-    
-    % Add execution baseline events
-    exe_obs_latencies=[EEG.event(find(strcmp('LBEX',{EEG.event.type}))).latency];
-    for i=1:length(exe_obs_latencies)
-        n_events=length(EEG.event);
-        EEG.event(n_events+1).type='EBM';
-        EEG.event(n_events+1).latency=(exe_obs_latencies(i)-1.5*EEG.srate)-1;
-        EEG.event(n_events+1).urevent=n_events+1;
-    end
-    %check for consistency and reorder the events chronologically...
-    EEG=eeg_checkset(EEG,'eventconsistency');
-    
+        
     %% Adjust anti-aliasing and task related time offset
     % adjust anti-aliasing filter time offset
     filter_timeoffset = 18;
     for aafto=1:length(EEG.event)
-        EEG.event(aafto).latency=EEG.event(aafto).latency+(filter_timeoffset/1000)*EEG.srate;
+        if ~strcmp(EEG.event(aafto).type,'FTGO') && ~strcmp(EEG.event(aafto).type,'FTGE') && ~strcmp(EEG.event(aafto).type,'EXGC') && ~strcmp(EEG.event(aafto).type,'EXEND')
+            EEG.event(aafto).latency=EEG.event(aafto).latency+(filter_timeoffset/1000)*EEG.srate;
+        end
     end
     
     %% Filter data
@@ -604,5 +631,5 @@ report_table.Properties.VariableNames={'subject','lof_flat_channels', 'lof_chann
     'lof_periodo_channels', 'lof_bad_channels', 'asr_tot_samples_modified', 'asr_change_in_RMS',...
     'ica_preparation_bad_channels', 'length_ica_data', 'total_ICs', 'ICs_removed', 'total_epochs_before_artifact_rejection', ...
     'total_epochs_after_artifact_rejection', 'total_channels_interpolated'};
-writetable(report_table, fullfile(study_info.data_dir, 'derivatives', 'NEARICA', ['NEARICA_preprocessing_report_', datestr(now,'dd-mm-yyyy'),'.csv']));
+writetable(report_table, fullfile(study_info.data_dir, 'derivatives', 'NEARICA_behav', ['NEARICA_preprocessing_report_', datestr(now,'dd-mm-yyyy'),'.csv']));
 end
