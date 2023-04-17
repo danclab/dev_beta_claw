@@ -13,7 +13,7 @@ def nan_basic_interp(array):
 
 
 
-def zapline_until_gone(data, target_freq, sfreq, win_sz=10, spot_sz=2.5, viz=False, prefix="zapline_iter"):
+def zapline_until_gone(data, target_freq, sfreq, win_sz=10, spot_sz=2.5, viz=False, prefix="zapline_iter", max_iter=100):
     """
     Returns: clean data, number of iterations
 
@@ -42,6 +42,9 @@ def zapline_until_gone(data, target_freq, sfreq, win_sz=10, spot_sz=2.5, viz=Fal
     resid_lims=[]
     while True:
         if iterations>0:
+            if iterations>=max_iter:
+                break
+
             data, art = dss_line(data.transpose(), target_freq, sfreq, nremove=1)
             del art
             data = data.transpose()
