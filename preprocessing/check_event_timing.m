@@ -17,33 +17,78 @@ for s_idx=1:size(study_info.participant_info,1)
     data_file_name=sprintf('%s_task-%s_eeg.set',subject, study_info.task);
     EEG=pop_loadset('filename', data_file_name, 'filepath', subject_raw_data_dir);
     
-    obs_base_start=find(strcmp({EEG.event.type},'LBOB'))-1;
-    obs_base_end=find(strcmp({EEG.event.type},'LBOB'));
-    obs_base_duration=[EEG.event(obs_base_end).latency]./EEG.srate-[EEG.event(obs_base_start).latency]./EEG.srate;
-    all_obs_base(end+1:end+length(obs_base_duration))=obs_base_duration;
+    base_starts=find(strcmp({EEG.event.type},'LBSE'));
+    for i=1:length(base_starts)
+        base_start=EEG.event(base_starts(i)).latency/EEG.srate;
+        next_event=base_starts(i)+1;
+        if next_event<=length(EEG.event)
+            if strcmp(EEG.event(next_event).type,'LBOB')
+                obs_base_end=EEG.event(next_event).latency/EEG.srate;
+                obs_base_duration=obs_base_end-base_start;
+                all_obs_base(end+1)=obs_base_duration;
+            elseif strcmp(EEG.event(next_event).type,'LBEX')
+                exe_base_end=EEG.event(next_event).latency/EEG.srate;
+                exe_base_duration=exe_base_end-base_start;
+                all_exe_base(end+1)=exe_base_duration;
+            end            
+        end
+    end
+    disp(sprintf('Baseline epochs: %d', length(base_starts)));
     
-    obs_start=find(strcmp({EEG.event.type},'FTGO'))-1;
-    touch_start=find(strcmp({EEG.event.type},'FTGO'));
-    obs_reach_duration=[EEG.event(touch_start).latency]./EEG.srate-[EEG.event(obs_start).latency]./EEG.srate;
-    all_obs_reach(end+1:end+length(obs_reach_duration))=obs_reach_duration;
+    obs_starts=find(strcmp({EEG.event.type},'LOBS'));
+    for i=1:length(obs_starts)
+        obs_start=EEG.event(obs_starts(i)).latency/EEG.srate;
+        next_event=obs_starts(i)+1;
+        if next_event<=length(EEG.event)
+            if strcmp(EEG.event(next_event).type,'FTGO')
+                obs_reach_end=EEG.event(next_event).latency/EEG.srate;
+                obs_reach_duration=obs_reach_end-obs_start;
+                all_obs_reach(end+1)=obs_reach_duration;
+                
+                next_next_event=next_event+1;
+                obs_grasp_end=EEG.event(next_next_event).latency/EEG.srate;
+                obs_grasp_duration=obs_grasp_end-obs_reach_end;
+                all_obs_grasp(end+1)=obs_grasp_duration;                
+            else
+                all_obs_reach(end+1)=NaN;
+                all_obs_grasp(end+1)=NaN;
+            end
+        else
+            all_obs_reach(end+1)=NaN;
+            all_obs_grasp(end+1)=NaN;
+        end
+    end
+    obs_without_contact=length(obs_starts)-length(find(strcmp({EEG.event.type},'FTGO')));
+    disp(sprintf('Observation epochs: %d', length(obs_starts)));
+    disp(sprintf('Observation epochs without contact: %d', obs_without_contact));
     
-    obs_end=find(strcmp({EEG.event.type},'FTGO'))+1;
-    obs_grasp_duration=[EEG.event(obs_end).latency]./EEG.srate-[EEG.event(touch_start).latency]./EEG.srate;
-    all_obs_grasp(end+1:end+length(obs_grasp_duration))=obs_grasp_duration;
-    
-    exe_base_start=find(strcmp({EEG.event.type},'LBEX'))-1;
-    exe_base_end=find(strcmp({EEG.event.type},'LBEX'));
-    exe_base_duration=[EEG.event(exe_base_end).latency]./EEG.srate-[EEG.event(exe_base_start).latency]./EEG.srate;
-    all_exe_base(end+1:end+length(exe_base_duration))=exe_base_duration;
-    
-    exe_start=find(strcmp({EEG.event.type},'FTGE'))-1;
-    touch_start=find(strcmp({EEG.event.type},'FTGE'));
-    exe_reach_duration=[EEG.event(touch_start).latency]./EEG.srate-[EEG.event(exe_start).latency]./EEG.srate;
-    all_exe_reach(end+1:end+length(exe_reach_duration))=exe_reach_duration;
-    
-    exe_end=find(strcmp({EEG.event.type},'FTGE'))+1;
-    exe_grasp_duration=[EEG.event(exe_end).latency]./EEG.srate-[EEG.event(touch_start).latency]./EEG.srate;
-    all_exe_grasp(end+1:end+length(exe_grasp_duration))=exe_grasp_duration;
+    exe_starts=find(strcmp({EEG.event.type},'LEXT'));
+    for i=1:length(exe_starts)
+        exe_start=EEG.event(exe_starts(i)).latency/EEG.srate;
+        next_event=exe_starts(i)+1;
+        if next_event<length(EEG.event)
+            if strcmp(EEG.event(next_event).type,'FTGE')
+                exe_reach_end=EEG.event(next_event).latency/EEG.srate;
+                exe_reach_duration=exe_reach_end-exe_start;
+                all_exe_reach(end+1)=exe_reach_duration;
+                
+                next_next_event=next_event+1;
+                exe_grasp_end=EEG.event(next_next_event).latency/EEG.srate;
+                exe_grasp_duration=exe_grasp_end-exe_reach_end;
+                all_exe_grasp(end+1)=exe_grasp_duration;                
+            else
+                all_exe_reach(end+1)=NaN;
+                all_exe_grasp(end+1)=NaN;
+            end            
+        end
+    end
+    exe_without_contact=length(exe_starts)-length(find(strcmp({EEG.event.type},'FTGE')));
+    disp(sprintf('Execution epochs: %d', length(exe_starts)));
 end
     
-print('');
+figure();hist(all_exe_base,20);
+figure();hist(all_obs_base,20);
+figure();hist(all_exe_reach,20);
+figure();hist(all_exe_grasp,20);
+figure();hist(all_obs_reach,20);
+figure();hist(all_obs_grasp,20);
