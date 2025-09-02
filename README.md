@@ -1,5 +1,11 @@
 # dev_beta_claw
 
+Analysis code for analysing beta bursts in infant and adult EEG data. 
+
+> Rayson, H, Szul, MJ, El-Khoueiry, P, Debnath, R, Gautier-Martins, M, Ferrari, PF, Fox, N, Bonaiuto, JJ<br>
+> **Bursting with potential: how sensorimotor beta bursts develop from infancy to adulthood**<br>
+> Journal of Neuroscience 2023, https://www.jneurosci.org/content/43/49/8487.abstract
+
 ## Requirements - MATLAB
 * MATLAB vR2018a
 * NoiseTools (http://audition.ens.fr/adc/NoiseTools/)
